@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGL Test</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #000; 
+      color: #00F0FF;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebGL Test Page</h1>
+  <p>If you see this message, HTML is loading correctly.</p>
+  <p>Testing basic JavaScript functionality...</p>
+  <div id="result"></div>
+
+  <script>
+    // Test basic JavaScript
+    document.getElementById('result').innerHTML = 'JavaScript is working: ' + new Date().toISOString();
+    
+    // Test WebGL availability
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    if (gl && gl instanceof WebGLRenderingContext) {
+      document.body.innerHTML += '<p style="color: #00F0FF;">✓ WebGL is supported</p>';
+    } else {
+      document.body.innerHTML += '<p style="color: #FF0000;">✗ WebGL is NOT supported</p>';
+    }
+  </script>
+</body>
+</html>
