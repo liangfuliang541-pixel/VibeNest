@@ -1,61 +1,155 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-// --- 视觉算法：根据 ID 生成稳定颜色 ---
+// --- 工具：哈希颜色生成 ---
 const stringToColor = (str) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
   const h = Math.abs(hash % 360);
-  return `hsl(${h}, 85%, 65%)`; // 更明亮的论坛配色
+  return `hsl(${h}, 85%, 65%)`; 
 };
 
-// --- 核心算法：质量 = 字数权重 + 评论数权重 (讨论越多，星星越大) ---
+// --- 工具：质量计算 ---
 const calculateMass = (idea) => {
-  const baseSize = 4; // 基础大小
-  const commentBonus = idea.comments * 3; // 每多一条评论，半径+3 (热度极具视觉冲击力)
-  const contentBonus = Math.min(idea.desc.length / 100, 3); // 内容越长也有加成
-  return Math.min(baseSize + commentBonus + contentBonus, 25); // 限制最大值，防止刷屏
+  const baseSize = 4;
+  const commentBonus = idea.comments * 3; 
+  return Math.min(baseSize + commentBonus, 25);
 };
 
-// --- 宣言弹窗 (Manifesto) ---
-const ManifestoModal = ({ onClose }) => (
-  <div style={{
-    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-    width: '600px', padding: '50px', background: 'rgba(5, 8, 12, 0.98)',
-    border: '1px solid #BD00FF', borderRadius: '2px', zIndex: 50,
-    boxShadow: '0 0 80px rgba(189, 0, 255, 0.2)', color: '#E6EDF3'
-  }}>
-    <h1 style={{ marginTop: 0, color: '#BD00FF', fontFamily: 'serif', fontSize: '2.5rem', letterSpacing: '-2px' }}>THE NEXUS</h1>
-    <h3 style={{ color: '#8B949E', fontWeight: 'normal', marginBottom: '30px', fontFamily: 'monospace' }}>// 改变世界的思想孵化器</h3>
-    
-    <p style={{ lineHeight: 1.8, fontSize: '1.1rem', color: '#D0D7DE' }}>
-      传统的论坛是平面的，充满噪音。VibeNest 试图构建一个<strong>“三维的思想宇宙”</strong>。
-    </p>
-    <p style={{ lineHeight: 1.8, fontSize: '1.1rem', color: '#D0D7DE' }}>
-      在这里，所有的想法都是平等的星辰。但只有那些引发共鸣、激起讨论的火花，才会演变成照亮他人的恒星。
-    </p>
-    <p style={{ lineHeight: 1.8, fontSize: '1.1rem', color: '#D0D7DE' }}>
-      不管你是开发者、艺术家还是梦想家，在这里投下你的种子。如果它足够伟大，整个星系都会围绕它旋转。
-    </p>
+// --- 音频引擎组件 ---
+const AmbientSound = ({ active }) => {
+  const audioCtxRef = useRef(null);
+  const oscillatorRef = useRef(null);
+  const gainNodeRef = useRef(null);
 
-    <div style={{ marginTop: '50px', display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
-      <button onClick={onClose} style={{ padding: '12px 30px', background: 'transparent', border: '1px solid #BD00FF', color: '#BD00FF', cursor: 'pointer', fontFamily: 'monospace' }}>
-        OBSERVE
-      </button>
-      <a href="https://github.com/liangfuliang541-pixel/VibeNest/issues/new" target="_blank" rel="noreferrer" style={{ padding: '12px 30px', background: '#BD00FF', color: '#000', textDecoration: 'none', fontWeight: 'bold', fontFamily: 'monospace' }}>
-        INITIATE TOPIC
-      </a>
+  useEffect(() => {
+    if (active) {
+      // 初始化音频上下文
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtxRef.current = new AudioContext();
+      
+      // 创建振荡器 (生成深空低频噪音)
+      const osc = audioCtxRef.current.createOscillator();
+      const gain = audioCtxRef.current.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(50, audioCtxRef.current.currentTime); // 50Hz 低频
+      
+      // 动态音量 (呼吸感)
+      gain.gain.setValueAtTime(0.05, audioCtxRef.current.currentTime);
+      
+      osc.connect(gain);
+      gain.connect(audioCtxRef.current.destination);
+      osc.start();
+      
+      oscillatorRef.current = osc;
+      gainNodeRef.current = gain;
+    } else {
+      if (audioCtxRef.current) audioCtxRef.current.close();
+    }
+
+    return () => {
+      if (audioCtxRef.current) audioCtxRef.current.close();
+    };
+  }, [active]);
+
+  return null;
+};
+
+// --- 详情弹窗 (含评论流) ---
+const DetailModal = ({ idea, onClose }) => {
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(true);
+
+  // 实时抓取该 Issue 的具体评论
+  useEffect(() => {
+    if (idea.comments === 0) {
+      setLoadingComments(false);
+      return;
+    }
+    const fetchComments = async () => {
+      try {
+        const res = await fetch(idea.comments_url);
+        const data = await res.json();
+        setComments(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingComments(false);
+      }
+    };
+    fetchComments();
+  }, [idea]);
+
+  return (
+    <div style={{
+      position: 'absolute', right: '0', top: '0', height: '100%',
+      width: '500px', padding: '40px', background: 'rgba(5, 8, 12, 0.95)',
+      borderLeft: `1px solid ${idea.color}`, backdropFilter: 'blur(20px)',
+      color: '#E6EDF3', boxShadow: `-20px 0 80px rgba(0,0,0,0.8)`, zIndex: 100,
+      overflowY: 'auto'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <span style={{ fontFamily: 'monospace', color: idea.color, border: `1px solid ${idea.color}`, padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
+          NODE ID: #{idea.id}
+        </span>
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '20px' }}>×</button>
+      </div>
+
+      <h1 style={{ marginTop: 0, fontSize: '2rem', lineHeight: 1.2, color: '#fff', textShadow: `0 0 20px ${idea.color}40` }}>{idea.title}</h1>
+      
+      <div style={{ margin: '30px 0', padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', borderLeft: `4px solid ${idea.color}` }}>
+        <p style={{ lineHeight: 1.8, color: '#C9D1D9', fontSize: '1.05rem', whiteSpace: 'pre-wrap', margin: 0 }}>
+          {idea.desc}
+        </p>
+      </div>
+
+      {/* 评论区 (论坛核心) */}
+      <h3 style={{ color: '#BD00FF', fontFamily: 'monospace', marginTop: '40px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+        // SIGNAL TRANSMISSIONS ({idea.comments})
+      </h3>
+
+      {loadingComments ? (
+        <p style={{ color: '#666', fontFamily: 'monospace' }}>Decryping signals...</p>
+      ) : comments.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
+          {comments.map(c => (
+            <div key={c.id} style={{ display: 'flex', gap: '15px' }}>
+               <img src={c.user.avatar_url} alt="" style={{ width: '30px', height: '30px', borderRadius: '50%' }} />
+               <div>
+                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>@{c.user.login}</div>
+                 <div style={{ color: '#D0D7DE', fontSize: '0.95rem', lineHeight: '1.5', background: '#161B22', padding: '10px', borderRadius: '0 10px 10px 10px' }}>
+                   {c.body}
+                 </div>
+               </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#444' }}>
+          <p>暂无信号回传。</p>
+          <a href={idea.url} target="_blank" rel="noreferrer" style={{ color: '#BD00FF' }}>成为第一个发送信号的人</a>
+        </div>
+      )}
+
+      {/* 底部按钮 */}
+      <div style={{ marginTop: '50px' }}>
+        <a href={idea.url} target="_blank" rel="noreferrer" style={{ display: 'block', padding: '15px', background: idea.color, color: '#000', textAlign: 'center', textDecoration: 'none', fontWeight: 'bold', borderRadius: '4px' }}>
+          加入讨论 (GitHub)
+        </a>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function App() {
   const canvasRef = useRef(null);
   const [selectedIdea, setSelectedIdea] = useState(null);
   const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('UNIVERSE');
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  // 1. 获取 GitHub 数据 (包含 comments 字段)
+  // 1. 获取 GitHub 数据
   useEffect(() => {
     const fetchIdeas = async () => {
       try {
@@ -65,12 +159,11 @@ export default function App() {
           title: issue.title,
           desc: issue.body || "暂无描述",
           url: issue.html_url,
-          comments: issue.comments, // 获取评论数
-          user: issue.user.login,   // 获取发起人
-          avatar: issue.user.avatar_url, // 发起人头像
+          comments_url: issue.comments_url, // 评论 API 地址
+          comments: issue.comments, 
+          user: issue.user.login,
           color: stringToColor(issue.title),
-          id: issue.id,
-          labels: issue.labels
+          id: issue.id
         }));
         setIdeas(formattedIdeas);
         setLoading(false);
@@ -82,10 +175,21 @@ export default function App() {
     fetchIdeas();
   }, []);
 
-  // 2. 渲染星系
+  // 2. 鼠标监听 (视差效果)
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      setMousePos({
+        x: (e.clientX / window.innerWidth) * 2 - 1,
+        y: (e.clientY / window.innerHeight) * 2 - 1
+      });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // 3. 渲染星系
   useEffect(() => {
     if (ideas.length === 0 && !loading) return;
-
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
@@ -97,33 +201,44 @@ export default function App() {
     window.addEventListener('resize', resize);
     resize();
 
-    // 粒子化
     const particles = ideas.map((idea) => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: calculateMass(idea), // 动态大小
+      // 基础位置
+      baseX: Math.random() * canvas.width,
+      baseY: Math.random() * canvas.height,
+      // 深度 (Z轴模拟)，0.5-2.0，越小越远，动得越慢
+      depth: Math.random() * 1.5 + 0.5, 
+      size: calculateMass(idea),
       color: idea.color,
-      speedX: (Math.random() - 0.5) * 0.3,
-      speedY: (Math.random() - 0.5) * 0.3,
       data: idea,
-      angle: Math.random() * Math.PI * 2 // 自转角度
+      angle: Math.random() * Math.PI * 2
     }));
 
     const render = () => {
-      ctx.fillStyle = '#05080C'; // 更深邃的宇宙黑
+      ctx.fillStyle = '#05080C'; 
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 绘制连线：只连接同一作者或者相似颜色的想法（模拟"圈子"）
+      // 视差偏移量
+      const parallaxX = mousePos.x * 50; 
+      const parallaxY = mousePos.y * 50;
+
+      // 绘制连线
       particles.forEach((p1, i) => {
+        // 计算这一帧的实际位置 (带视差)
+        const p1x = p1.baseX - (parallaxX * p1.depth);
+        const p1y = p1.baseY - (parallaxY * p1.depth);
+
         particles.slice(i + 1).forEach(p2 => {
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
+          const p2x = p2.baseX - (parallaxX * p2.depth);
+          const p2y = p2.baseY - (parallaxY * p2.depth);
+          
+          const dx = p1x - p2x;
+          const dy = p1y - p2y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           
           if (dist < 200) {
             ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
+            ctx.moveTo(p1x, p1y);
+            ctx.lineTo(p2x, p2y);
             const opacity = (1 - dist / 200) * 0.15;
             ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.stroke();
@@ -133,21 +248,29 @@ export default function App() {
 
       // 绘制粒子
       particles.forEach(p => {
-        p.x += p.speedX;
-        p.y += p.speedY;
-        if (p.x < 0 || p.x > canvas.width) p.speedX *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.speedY *= -1;
+        // 更新位置 (简单的漂浮动画 + 视差)
+        p.baseX += Math.sin(p.angle) * 0.2;
+        p.baseY += Math.cos(p.angle) * 0.2;
+        p.angle += 0.01;
 
-        // 外发光 (根据评论数决定光晕大小)
-        const glowSize = p.data.comments * 10; 
+        // 边界循环
+        if (p.baseX < -50) p.baseX = canvas.width + 50;
+        if (p.baseX > canvas.width + 50) p.baseX = -50;
+        if (p.baseY < -50) p.baseY = canvas.height + 50;
+        if (p.baseY > canvas.height + 50) p.baseY = -50;
+
+        // 最终渲染坐标
+        const renderX = p.baseX - (parallaxX * p.depth);
+        const renderY = p.baseY - (parallaxY * p.depth);
+
+        const glowSize = p.data.comments * 8; 
         
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.arc(renderX, renderY, p.size, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
         
-        // 热度越高，光晕越强
         if (p.data.comments > 0) {
-            ctx.shadowBlur = 20 + glowSize;
+            ctx.shadowBlur = 15 + glowSize;
             ctx.shadowColor = p.color;
         } else {
             ctx.shadowBlur = 0;
@@ -156,12 +279,11 @@ export default function App() {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // 如果是热门话题 (评论>0)，绘制轨道圈
+        // 热门话题轨道
         if (p.data.comments > 0) {
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size + 8, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(255,255,255,0.2)`;
-            ctx.lineWidth = 1;
+            ctx.arc(renderX, renderY, p.size + 10, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255,255,255,0.1)`;
             ctx.stroke();
         }
       });
@@ -171,14 +293,20 @@ export default function App() {
     render();
 
     const handleClick = (e) => {
-      if (view !== 'UNIVERSE') return;
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
+      
+      const parallaxX = mousePos.x * 50;
+      const parallaxY = mousePos.y * 50;
+
       const clicked = particles.find(p => {
-        const dx = p.x - clickX;
-        const dy = p.y - clickY;
-        return Math.sqrt(dx * dx + dy * dy) < (p.size + 15);
+        // 点击检测也需要计算视差后的位置
+        const renderX = p.baseX - (parallaxX * p.depth);
+        const renderY = p.baseY - (parallaxY * p.depth);
+        const dx = renderX - clickX;
+        const dy = renderY - clickY;
+        return Math.sqrt(dx * dx + dy * dy) < (p.size + 20);
       });
       if (clicked) setSelectedIdea(clicked.data);
     };
@@ -189,83 +317,43 @@ export default function App() {
       canvas.removeEventListener('click', handleClick);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [ideas, loading, view]);
+  }, [ideas, loading, mousePos]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#05080C' }}>
-      <canvas ref={canvasRef} style={{ display: 'block', cursor: view === 'UNIVERSE' ? 'crosshair' : 'default', opacity: view === 'ABOUT' ? 0.2 : 1, transition: 'opacity 0.5s' }} />
+      
+      <AmbientSound active={audioEnabled} />
+      
+      <canvas ref={canvasRef} style={{ display: 'block', cursor: 'pointer' }} />
 
-      {/* 侧边栏 */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, height: '100%', width: '60px',
-        borderRight: '1px solid #1F2428', background: 'rgba(5,8,12,0.6)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 0', zIndex: 20
-      }}>
-        <div style={{ width: '10px', height: '10px', background: '#BD00FF', borderRadius: '50%', marginBottom: '60px', boxShadow: '0 0 10px #BD00FF' }}></div>
-        <button onClick={() => setView('UNIVERSE')} style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', padding: '20px', background: 'transparent', border: 'none', color: view === 'UNIVERSE' ? '#E6EDF3' : '#444', cursor: 'pointer', fontFamily: 'monospace', fontSize: '12px' }}>GALAXY</button>
-        <button onClick={() => setView('ABOUT')} style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', padding: '20px', background: 'transparent', border: 'none', color: view === 'ABOUT' ? '#BD00FF' : '#444', cursor: 'pointer', fontFamily: 'monospace', fontSize: '12px', marginTop: '20px' }}>MANIFESTO</button>
-      </div>
-
-      {/* 顶部数据流 */}
-      <div style={{ position: 'absolute', top: '30px', left: '90px', pointerEvents: 'none' }}>
+      {/* 顶部栏 */}
+      <div style={{ position: 'absolute', top: '30px', left: '40px', display: 'flex', alignItems: 'center', gap: '20px', zIndex: 10 }}>
         <h1 style={{ margin: 0, fontSize: '1.8rem', fontFamily: 'sans-serif', fontWeight: 800, letterSpacing: '-1px', color: '#E6EDF3' }}>
-          VibeNest <span style={{ color: '#BD00FF' }}>.Forum</span>
+          VibeNest <span style={{ color: '#BD00FF' }}>.Singularity</span>
         </h1>
-        <div style={{ display: 'flex', gap: '20px', marginTop: '5px', fontSize: '12px', fontFamily: 'monospace', color: '#6E7681' }}>
-            <span>TOPICS: {ideas.length}</span>
-            <span>ACTIVE_NODES: {ideas.filter(i => i.comments > 0).length}</span>
-            <span>STATUS: LISTENING</span>
+        
+        <div style={{ display: 'flex', gap: '15px', fontSize: '12px', fontFamily: 'monospace', color: '#6E7681' }}>
+          <span>TOPICS: {ideas.length}</span>
+          <span>ACTIVE: {ideas.filter(i => i.comments > 0).length}</span>
+          <button 
+            onClick={() => setAudioEnabled(!audioEnabled)}
+            style={{ 
+              background: audioEnabled ? '#BD00FF' : 'transparent', 
+              border: '1px solid #BD00FF', 
+              color: audioEnabled ? '#000' : '#BD00FF',
+              padding: '4px 10px', 
+              cursor: 'pointer', 
+              fontFamily: 'monospace',
+              borderRadius: '4px'
+            }}
+          >
+            {audioEnabled ? '🔇 MUTE' : '🔊 SOUND'}
+          </button>
         </div>
       </div>
 
-      {/* 关于弹窗 */}
-      {view === 'ABOUT' && <ManifestoModal onClose={() => setView('UNIVERSE')} />}
-
-      {/* 话题详情卡片 */}
-      {selectedIdea && view === 'UNIVERSE' && (
-        <div style={{
-          position: 'absolute', right: '0', top: '0', height: '100%',
-          width: '450px', padding: '40px', background: 'rgba(13, 17, 23, 0.95)',
-          borderLeft: `1px solid ${selectedIdea.color}`, backdropFilter: 'blur(15px)',
-          color: '#E6EDF3', boxShadow: `-20px 0 50px rgba(0,0,0,0.5)`, zIndex: 30,
-          transform: 'translateX(0)', transition: 'transform 0.3s'
-        }}>
-          {/* 发起人信息 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <img src={selectedIdea.avatar} alt="user" style={{ width: '30px', height: '30px', borderRadius: '50%', border: '1px solid #333' }} />
-            <span style={{ fontSize: '12px', color: '#8B949E', fontFamily: 'monospace' }}>@{selectedIdea.user}</span>
-            <span style={{ marginLeft: 'auto', fontSize: '12px', color: selectedIdea.color, border: `1px solid ${selectedIdea.color}`, padding: '2px 8px', borderRadius: '10px' }}>
-              #{selectedIdea.id}
-            </span>
-          </div>
-
-          <h1 style={{ marginTop: 0, fontSize: '2rem', lineHeight: 1.2, color: '#E6EDF3' }}>{selectedIdea.title}</h1>
-          
-          {/* 热度指标 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0', fontSize: '12px', color: '#8B949E', fontFamily: 'monospace' }}>
-            <span style={{ color: selectedIdea.comments > 0 ? '#BD00FF' : '#555' }}>🔥 {selectedIdea.comments} DISCUSSION(S)</span>
-            <span>•</span>
-            <span>OPEN TOPIC</span>
-          </div>
-
-          <p style={{ lineHeight: 1.6, color: '#C9D1D9', fontSize: '1rem', whiteSpace: 'pre-wrap' }}>
-            {selectedIdea.desc}
-          </p>
-
-          <div style={{ position: 'absolute', bottom: '40px', left: '40px', right: '40px' }}>
-             <a 
-               href={selectedIdea.url} target="_blank" rel="noreferrer" 
-               style={{ 
-                 display: 'block', padding: '15px', background: selectedIdea.color, 
-                 color: '#000', textAlign: 'center', textDecoration: 'none', 
-                 fontWeight: 'bold', fontFamily: 'sans-serif', letterSpacing: '1px'
-               }}
-             >
-               JOIN DISCUSSION
-             </a>
-          </div>
-        </div>
-      )}
+      {/* 详情弹窗 */}
+      {selectedIdea && <DetailModal idea={selectedIdea} onClose={() => setSelectedIdea(null)} />}
     </div>
   );
 }
