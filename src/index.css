@@ -1,0 +1,19 @@
+:root {
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+}
+
+body, html, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* 防止滚动条出现 */
+  background-color: #0A0E14; /* 兜底背景色 */
+}
+
+canvas {
+  touch-action: none; /* 优化移动端触摸 */
+}

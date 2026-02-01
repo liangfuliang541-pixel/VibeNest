@@ -1,0 +1,34 @@
+{
+  "name": "vibenest",
+  "version": "1.0.0",
+  "description": "VibeNest - 一个收集人类微小创意并推动其改变世界的平台",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "vibenest",
+    "creative",
+    "ideas",
+    "threejs",
+    "react",
+    "visualization"
+  ],
+  "author": "Liangfu Liang",
+  "license": "MIT",
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "gsap": "^3.14.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.182.0",
+    "vite": "^5.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^5.0.0"
+  }
+}
